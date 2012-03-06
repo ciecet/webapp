@@ -1,6 +1,6 @@
-#require 'webplayer'
 require 'socket'
 require 'stringio'
+require 'webrick/httputils'
 
 module WebApp
 
@@ -91,15 +91,25 @@ end
 class AppMap
     def initialize appmap
         @appmap = appmap
+        @regs = {}
+        appmap.each { |k,v|
+            @regs[k] = v if Regexp === k
+        }
     end
 
     def call ctx
-        path = ctx.env['DOCUMENT_URI']
-        app = @appmap[path]
+        urlpath = ctx.env['DOCUMENT_URI']
+        app = @appmap[urlpath]
+        @regs.each { |k,v|
+            next unless urlpath =~ k
+            app = v
+            break
+        }
+
         if app
             app.call ctx
         else
-            throw "No application found at #{path}"
+            throw "No application found at #{urlpath}"
         end
     end
 end
@@ -127,6 +137,7 @@ open("/etc/mime.types", "r") { |f| f.each_line {|l|
 
 class File
     def initialize filepath, mt=nil
+        throw "File not found: #{filepath}" unless ::File.file?(filepath)
         @filepath = filepath
         unless mt
             mt = MIME_TYPES[(filepath[/[^.]*$/] || "").downcase]
@@ -169,6 +180,47 @@ class File
                 IO.copy_stream(f, ctx.io)
             }
         end
+    end
+end
+
+class Dir
+    def initialize hostbase, urlbase=nil
+        @hostbase = hostbase.gsub(/\/*$/, "")
+        @urlbase = urlbase || "/"
+    end
+
+    def call ctx
+        urlpath = WEBrick::HTTPUtils::unescape(ctx.env['DOCUMENT_URI']).
+                force_encoding("utf-8")
+        unless urlpath == @urlbase || urlpath.start_with?(@urlbase+"/")
+            throw "Cannot access to #{urlpath}. #{@urlbase}"
+        end
+
+        p = urlpath[@urlbase.size..-1].split("/") - ["", ".", ".."]
+        hostpath = ([@hostbase]+p).join("/")
+        urlpath = ([@urlbase]+p).join("/")
+
+        unless ::File.directory?(hostpath)
+            WebApp::File.new(hostpath).call ctx
+            return
+        end
+
+        out = StringIO.new
+        out << %(<html><head><title>#{urlpath.to_html}</title></head><body>)
+        unless p.empty?
+            out << %(<a href="#{WEBrick::HTTPUtils.escape(
+                ::File.dirname(urlpath).force_encoding("ASCII-8BIT"))
+                }">(Parent Directory)</a><br/>)
+        end
+        (::Dir.new(hostpath).sort - [".", ".."]).each { |e|
+            out << %(<a href="#{WEBrick::HTTPUtils.escape(
+                (urlpath+"/"+e).force_encoding("ASCII-8BIT"))
+                }">#{e.to_html}</a><br/>)
+        }
+        out << %(</body></html>)
+
+        ctx.reply 200, "Content-Type: text/html"
+        ctx.io.puts out.string
     end
 end
 
