@@ -60,41 +60,25 @@ class MediaBrowser
         case op
         when "static"
             WebApp::File.new(fullpath).call ctx
-        when "playlist"
+        when "playlist", "playlistlow"
             ctx.reply 200,
                 "Cache-Control: no-cache",
                 "Pragma: no-cache",
                 "Connection: close",
                 "Content-Type: audio/mpeg"
 
-            pipe = IO.pipe
-            begin
-                pid = Process.spawn("mpg123 -s --list - | lame -r --vbr-new - -",
-                        :in => pipe[0], :out => io)
-                each_mp3(fullpath) { |mp3f|
-                    pipe[1].puts mp3f
-                }
-            ensure
-                pipe[1].close
-                Process.wait(pid)
-            end
-        when "playlistlow"
-            ctx.reply 200,
-                "Cache-Control: no-cache",
-                "Pragma: no-cache",
-                "Connection: close",
-                "Content-Type: audio/mpeg"
+            lowopt = ("-q 0 -V 0" if op == "playlistlow")
 
-            pipe = IO.pipe
             begin
-                pid = Process.spawn("mpg123 -s --list - | lame -r -q 0 --vbr-new -V 0 - -",
-                        :in => pipe[0], :out => io)
+                pipe = IO.pipe
+                pid = Process.spawn("mpg123 -s --list - | lame -r --vbr-new #{
+                        lowopt} - -", :in => pipe[0], :out => io)
                 each_mp3(fullpath) { |mp3f|
                     pipe[1].puts mp3f
                 }
             ensure
                 pipe[1].close
-                Process.wait(pid)
+                Process.detach(pid)
             end
         when "browse"
             out = StringIO.new
@@ -131,7 +115,7 @@ class MediaBrowser
             out << %(<script type="text/javascript">)
             out << %(imagePaths = [ #{images.map{|e|(path+[e]).map{|p|safe_encode(p)}.join("/").inspect}.join(", ")} ];)
             out << %(imageNames = [ #{images.map{|e|"'"+e.to_html.gsub("'","\\'")+"'"}.join(", ")} ];)
-            out << %q(
+            out << %q{
             function showImage(id) {
                 d = document.getElementById("imageframe");
                 if (id < 0 || id >= imagePaths.length) {
@@ -147,7 +131,7 @@ class MediaBrowser
                 ihtml += "</div>"
                 d.innerHTML = ihtml;
                 d.style.display = "inherit";
-            })
+            }}.htrim
             out << %(</script>)
             out << %(<div style="z-index:9999;display:none;background-color:rgba(0,0,0,0.5);position:fixed;top:0%;bottom:0%;left:0%;right:0%;overflow:hidden;" id="imageframe"></div>)
             images.each { |e|
@@ -221,12 +205,6 @@ class MediaBrowser
             WebApp::File.new(thumbfile, "image/jpeg").call ctx
         when "browsepodcast"
             out = StringIO.new
-            out << "Status: 200 OK\n"
-            out << "Cache-Control: no-cache\n"
-            out << "Pragma: no-cache\n"
-            out << "Connection: close\n"
-            out << "Content-Type: text/html\n\n"
-
             out << "<html><head><meta http-equiv='content-type' content='text/html; charset=UTF-8' /><title>"
             out << path.join(" / ").to_html
             out << %(</title></head><body style="font-size:200%;">)
@@ -248,28 +226,22 @@ class MediaBrowser
                 next unless l.size == 2
                 p = [safe_encode(path[0]), safe_encode(l[1])].join("/")
                 #out << %(<b>[EPISODE]</b> <a href="?o=playpodcast&p=#{p}">#{l[0].to_html}</a>)
-                out << %(<b>[EPISODE]</b> <a href="#{l[1]}">#{l[0].to_html}</a>)
-                out << %( -- (<a href="?o=playpodcastlow&p=#{p}">low</a>)<br>)
+                out << %(<b>[EPISODE]</b> <a href="#{l[1]}">#{l[0].to_html}</a><br>)
             }
             out << "</body></html>"
 
-            io.puts out.string
+            ctx.reply 200,
+                "Cache-Control: no-cache",
+                "Pragma: no-cache",
+                "Connection: close",
+                "Content-Type: text/html"
+            ctx.io.puts out.string
         when "playpodcast"
             # guess content-type and stream
             ctx.reply 302, %(Location: #{path[1]})
         when "remote"
             # guess content-type and stream
             ctx.reply 302, %(Location: #{@pathmap[path][1]})
-        when "playpodcastlow"
-            ctx.reply 200,
-                "Cache-Control: no-cache",
-                "Pragma: no-cache",
-                "Connection: close",
-                "Content-Type: audio/mpeg"
-            IO.popen("mpg123 -s --list - | lame -r -q 0 --vbr-new -V 0 - -", "w") { |f|
-                f.puts path[1]
-                f.close_write
-            }
         else
             raise "Unknown operation:#{op}"
         end
