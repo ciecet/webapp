@@ -25,6 +25,6 @@ class String
         gsub(/_/, "\\_")
     end
     def htrim()
-        self.gsub(/\s*\n\s*/, "")
+        self.gsub(/\s*\n\s*/, " ")
     end
 end
