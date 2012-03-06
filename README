@@ -1,1 +1,13 @@
-Please refer run.rb for understading the usage.
+USAGE
+
+    Please refer run.rb.
+    It runs scgi server on port 9000.
+
+REQUIRED COMPONENTS
+
+    (WebApp framework doesn't need any outer components.
+    However, you'll need followings to run mediabrowser)
+
+    gem: ruby-openid
+    package: mpg123, lame, convert
+
