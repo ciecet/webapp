@@ -128,7 +128,7 @@ class MediaBrowser
                 ihtml += "<div style='width:60%;height:90%;position:absolute;top:10%;left:20%;' onclick='showImage(-1);'></div>";
                 ihtml += "<div style='width:20%;height:100%;position:absolute;left:0%;' onclick='showImage("+(id-1)+");'></div>";
                 ihtml += "<div style='width:20%;height:100%;position:absolute;right:0%;' onclick='showImage("+(id+1)+");'></div>";
-                ihtml += "</div>"
+                ihtml += "</div>";
                 d.innerHTML = ihtml;
                 d.style.display = "inherit";
             }}.htrim
