@@ -116,4 +116,60 @@ class CGI
     end
 end
 
+MIME_TYPES = {}
+open("/etc/mime.types", "r") { |f| f.each_line {|l|
+    l = l.strip.gsub(/#.*/, "").split
+    next unless l.size > 1
+    l[1..-1].each { |ext|
+        MIME_TYPES[ext] = l[0]
+    }
+}}
+
+class File
+    def initialize filepath, mt=nil
+        @filepath = filepath
+        unless mt
+            mt = MIME_TYPES[(filepath[/[^.]*$/] || "").downcase]
+        end
+        unless mt
+            IO.popen("file -b --mime-type -f -", "w+") { |f|
+                f.puts @filepath
+                f.close_write
+                mt = f.readline.chomp
+            }
+        end
+        @mimetype = mt || "application/octet-stream"
+    end
+
+    def call ctx
+        size = ::File.size(@filepath)
+        if ctx.env["HTTP_RANGE"] =~ /bytes=([0-9]*)-([0-9]*)(\/(.*))?/
+            b = $1.empty? ? 0 : $1.to_i
+            e = $2.empty? ? (size-1) : $2.to_i
+            ctx.reply 206,
+                "Cache-Control: no-cache",
+                "Pragma: no-cache",
+                "Connection: close",
+                "Content-Type: #{@mimetype}",
+                "Content-Range: bytes #{b}-#{e}/#{size}",
+                "Content-Length: #{e - b + 1}",
+                "Accept-Ranges: bytes"
+            open(@filepath, "r") {|f|
+                IO.copy_stream(f, ctx.io, (e-b+1), b)
+            }
+        else
+            ctx.reply 200, 
+                "Cache-Control: no-cache",
+                "Pragma: no-cache",
+                "Connection: close",
+                "Content-Type: #{@mimetype}",
+                "Content-Length: #{size}",
+                "Accept-Ranges: bytes"
+            open(@filepath, "r") {|f|
+                IO.copy_stream(f, ctx.io)
+            }
+        end
+    end
+end
+
 end # module

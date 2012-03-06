@@ -1,4 +1,5 @@
 require 'util'
+require 'webapp'
 require 'webrick/httputils'
 require "rexml/document"
 require 'rexml/xpath'
@@ -58,39 +59,7 @@ class MediaBrowser
 
         case op
         when "static"
-            mt = nil
-            IO.popen("file -b --mime-type -f -", "w+") { |f|
-                f.puts fullpath
-                f.close_write
-                mt = f.readline.chomp
-            }
-            size = File.size(fullpath)
-            if env["HTTP_RANGE"] =~ /bytes=([0-9]*)-([0-9]*)(\/(.*))?/
-                b = $1.empty? ? 0 : $1.to_i
-                e = $2.empty? ? (size-1) : $2.to_i
-                ctx.reply 206,
-                    "Cache-Control: no-cache",
-                    "Pragma: no-cache",
-                    "Connection: close",
-                    "Content-Type: #{mt}",
-                    "Content-Range: bytes #{b}-#{e}/#{size}",
-                    "Content-Length: #{e - b + 1}",
-                    "Accept-Ranges: bytes"
-                open(fullpath, "r") {|f|
-                    IO.copy_stream(f, io, (e-b+1), b)
-                }
-            else
-                ctx.reply 200, 
-                    "Cache-Control: no-cache",
-                    "Pragma: no-cache",
-                    "Connection: close",
-                    "Content-Type: #{mt}",
-                    "Content-Length: #{size}",
-                    "Accept-Ranges: bytes"
-                open(fullpath, "r") {|f|
-                    IO.copy_stream(f, io)
-                }
-            end
+            WebApp::File.new(fullpath).call ctx
         when "playlist"
             ctx.reply 200,
                 "Cache-Control: no-cache",
@@ -128,14 +97,7 @@ class MediaBrowser
                 Process.wait(pid)
             end
         when "browse"
-            out = []
-            out << "Status: 200 OK\n"
-            out << "Cache-Control: no-cache\n"
-            out << "Pragma: no-cache\n"
-            out << "Connection: close\n"
-            out << "Content-Type: text/html\n"
-            out << "\n"
-
+            out = StringIO.new
             out << "<html><head><meta http-equiv='content-type' content='text/html; charset=UTF-8' /><title>"
             out << path.join(" / ").to_html
             out << %(</title></head><body style="font-size:200%;">)
@@ -239,7 +201,13 @@ class MediaBrowser
             out << %(</table>)
 
             out << "</body></html>"
-            io.puts out.join
+
+            ctx.reply 200,
+                "Cache-Control: no-cache",
+                "Pragma: no-cache",
+                "Connection: close",
+                "Content-Type: text/html"
+            io.puts out.string
         when "thumbnail"
             thumbfile = %(#{BASE_DIR}/cache/thumb/#{path.map{|p|safe_encode(p)}.join("/")}.jpg)
             unless File.file?(thumbfile)
@@ -250,14 +218,7 @@ class MediaBrowser
                 }
             end
 
-            ctx.reply 200,
-                "Cache-Control: no-cache",
-                "Pragma: no-cache",
-                "Connection: close",
-                "Content-Type: image/jpeg"
-            open(thumbfile, "r") { |f|
-                IO.copy_stream(f, io)
-            }
+            WebApp::File.new(thumbfile, "image/jpeg").call ctx
         when "browsepodcast"
             out = StringIO.new
             out << "Status: 200 OK\n"
