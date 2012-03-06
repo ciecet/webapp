@@ -35,7 +35,7 @@ end
 
 class SCGI
     def initialize port=9000
-        @server = TCPServer.new("localhost", 9000)
+        @server = TCPServer.new("localhost", port)
     end
 
     def run app=nil, &p
