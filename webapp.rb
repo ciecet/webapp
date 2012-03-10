@@ -13,11 +13,48 @@ STATUS_MESSAGES = {
 
 class Context
     attr_reader :io, :env, :replied
+    attr_reader :queries, :cookies, :posts, :vars
 
     def initialize io, env
         @io = io
         @env = env
         @replied = false
+        @vars = {}
+
+        qs = env["QUERY_STRING"]
+        if qs
+            @queries = {}
+            qs.split("&").each { |kv|
+                (k,v) = kv.split("=",2)
+                @queries[k] = WEBrick::HTTPUtils::unescape(v) if v
+            }
+        end
+
+        hc = env["HTTP_COOKIE"]
+        if hc
+            @cookies = {}
+            hc.split("; ").each { |kv|
+                (k,v) = kv.split("=",2)
+                @cookies[k] = v if v
+            }
+        end
+
+        du = WEBrick::HTTPUtils::unescape(env['DOCUMENT_URI']).
+                force_encoding("utf-8")
+        @vars['APP_PATH'] = du.split("/") - ["", ".", ".."]
+        @vars['BASE_PATH'] = []
+    end
+
+    def readposts
+        return if @posts
+        cl = env['CONTENT_LENGTH']
+        return unless cl && env['REQUIRE_METHOD'] == "POST"
+
+        @posts = {}
+        @io.recv(cl.to_i).split("\n").each { |l|
+            (k,v) = l.split("=",2)
+            @posts[k] = WEBrick::HTTPUtils::unescape(v) if v
+        }
     end
 
     def reply status, *headers
@@ -80,8 +117,13 @@ class Dump
         ctx.reply 200, "Content-Type: text/html"
         ctx.io.puts %{
             <html><body>
+            <h2>Environments</h2>
             #{ctx.env.map{|k,v|
                 "<b>#{k.to_html}</b> = #{v.to_html}"
+            }.join("<br>")}
+            <h2>Variables</h2>
+            #{ctx.vars.map{|k,v|
+                "<b>#{k.to_html}</b> = #{v.inspect.to_html}"
             }.join("<br>")}
             </body></html>
         }.htrim
@@ -90,27 +132,25 @@ end
 
 class AppMap
     def initialize appmap
-        @appmap = appmap
-        @regs = {}
-        appmap.each { |k,v|
-            @regs[k] = v if Regexp === k
+        @appmap = {}
+        appmap.each {|k,v|
+            @appmap[k.split("/") - [""]] = v
         }
     end
 
     def call ctx
-        urlpath = ctx.env['DOCUMENT_URI']
-        app = @appmap[urlpath]
-        @regs.each { |k,v|
-            next unless urlpath =~ k
-            app = v
-            break
+        ap = ctx.vars['APP_PATH']
+        bp = ctx.vars['BASE_PATH']
+        @appmap.each { |k,v|
+            next unless ap[0..k.size-1] == k
+
+            ctx.vars['APP_PATH'] = ap.drop(k.size)
+            ctx.vars['BASE_PATH'] = k + bp
+            v.call ctx
+            return
         }
 
-        if app
-            app.call ctx
-        else
-            throw "No application found at #{urlpath}"
-        end
+        throw "No application found at #{(bp+ap).join("/")}"
     end
 end
 
@@ -184,21 +224,17 @@ class File
 end
 
 class Dir
-    def initialize hostbase, urlbase=nil
-        @hostbase = hostbase.gsub(/\/*$/, "")
-        @urlbase = urlbase || "/"
+    def initialize hbp
+        @hostBasePath = ::File.realpath(hbp)
     end
 
     def call ctx
-        urlpath = WEBrick::HTTPUtils::unescape(ctx.env['DOCUMENT_URI']).
-                force_encoding("utf-8")
-        unless urlpath == @urlbase || urlpath.start_with?(@urlbase+"/")
-            throw "Cannot access to #{urlpath}. #{@urlbase}"
-        end
+        ap = ctx.vars['APP_PATH']
+        throw "APP_PATH was determined." unless ap
+        bp = ctx.vars['BASE_PATH']
 
-        p = urlpath[@urlbase.size..-1].split("/") - ["", ".", ".."]
-        hostpath = ([@hostbase]+p).join("/")
-        urlpath = ([@urlbase]+p).join("/")
+        hostpath = ([@hostBasePath]+ap).join("/")
+        urlpath = (bp+ap).join("/")
 
         unless ::File.directory?(hostpath)
             WebApp::File.new(hostpath).call ctx
@@ -207,14 +243,12 @@ class Dir
 
         out = StringIO.new
         out << %(<html><head><title>#{urlpath.to_html}</title></head><body>)
-        unless p.empty?
-            out << %(<a href="#{WEBrick::HTTPUtils.escape(
-                ::File.dirname(urlpath).force_encoding("ASCII-8BIT"))
+        unless ap.empty?
+            out << %(<a href="/#{::File.dirname(urlpath).to_http
                 }">(Parent Directory)</a><br/>)
         end
         (::Dir.new(hostpath).sort - [".", ".."]).each { |e|
-            out << %(<a href="#{WEBrick::HTTPUtils.escape(
-                (urlpath+"/"+e).force_encoding("ASCII-8BIT"))
+            out << %(<a href="/#{(urlpath+"/"+e).to_http
                 }">#{e.to_html}</a><br/>)
         }
         out << %(</body></html>)

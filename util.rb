@@ -27,4 +27,7 @@ class String
     def htrim()
         self.gsub(/\s*\n\s*/, " ")
     end
+    def to_http()
+        WEBrick::HTTPUtils.escape(self.force_encoding("ASCII-8BIT"))
+    end
 end

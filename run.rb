@@ -1,9 +1,7 @@
 #!/usr/bin/ruby -Ku
 
 $: << "."
-require 'util'
 require 'webapp'
-require 'httpenv'
 require 'session'
 require 'mediabrowser'
 require 'sendkin'
@@ -21,9 +19,10 @@ mbrowser = MediaBrowser.new "/home/ciecet/media",
 users = ["ciecet@gmail.com", "okie9090@gmail.com"]
 
 map = WebApp::AppMap.new \
-    "/media" => HttpEnv.new(Session.new(mbrowser, users)),
-    "/sendkin" => HttpEnv.new(SendKin.new)
-#    %r(/src(/.*)?) => WebApp::Dir.new("/home/ciecet/media", "/src")
-#    "/test" => WebApp::File.new("test.html")
+    "/test" => WebApp::Dump.new,
+    "/doc" => Session.new(WebApp::Dir.new("/home/ciecet/doc"), users),
+    "/media" => Session.new(mbrowser, users),
+    "/sendkin" => SendKin.new
+#    "/mediatest" => mbrowser,
 
 WebApp::SCGI.new(9000).run map

@@ -4,25 +4,32 @@ require 'digest/sha1'
 
 class Session
 
+    @@sessions = {}
+
     def initialize app, users, timeout=2*60*60
         @app = app
         @users = users
         @timeout = timeout
-        @sessions = {}
     end
 
     def call ctx
+        curl = %(http://#{ctx.env['HTTP_HOST']}/#{
+            (ctx.vars['BASE_PATH'] + ctx.vars['APP_PATH']).join("/").to_http})
+
         # Handle authentication
-        env = ctx.env
-        sid = env["sid"]
-        stime = @sessions[sid][:stime] if @sessions.has_key?(sid)
-        if stime && (Time.now.to_i - stime) < @timeout
-            @app.call ctx
-            return
+        sid = ctx.cookies["sid"]
+        session = @@sessions[sid]
+        if session
+            if (Time.now.to_i - session[:stime]) < @timeout &&
+                    @users.include?(session[:email])
+                @app.call ctx
+                return
+            end
+            @@sessions[sid] = nil
         end
 
         sess = {}
-        env.each { |k,v|
+        ctx.queries.each { |k,v|
             next unless k =~ /^openid\./
             sess[k] = v
         }
@@ -34,14 +41,10 @@ class Session
             axreq.add(OpenID::AX::AttrInfo.new('http://axschema.org/contact/email','email',true))
             r.add_extension(axreq)
 
-            # TODO: MY_URL may contain private queries,
-            #       but ruby-openid cannot handle it.
-            # redir = r.redirect_url(env["BASE_URL"], MY_URL)
-            redir = r.redirect_url(env["BASE_URL"], env["BASE_URL"])
-
+            redir = r.redirect_url(curl, curl)
             ctx.reply 302, %(Location: #{redir})
         else
-            r = oc.complete(sess, env["BASE_URL"])
+            r = oc.complete(sess, curl)
             email = sess["openid.ext1.value.email"]
             unless OpenID::Consumer::SuccessResponse === r &&
                     @users.include?(email)
@@ -55,9 +58,9 @@ class Session
             sid = sha1.hexdigest
 
             ctx.reply 302,
-                "Set-Cookie: sid=#{sid}; HttpOnly",
-                %(Location: #{env["BASE_URL"]})
-            @sessions[sid] = { :stime => stime, :email => email }
+                "Set-Cookie: sid=#{sid}; Path=/; HttpOnly",
+                %(Location: #{curl})
+            @@sessions[sid] = { :stime => stime, :email => email }
         end
     end
 end
