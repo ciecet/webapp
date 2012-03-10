@@ -6,7 +6,8 @@ require 'session'
 require 'mediabrowser'
 require 'sendkin'
 
-mbrowser = MediaBrowser.new "/home/ciecet/media",
+users = ["ciecet@gmail.com", "okie9090@gmail.com"]
+mbrowser = MediaBrowser.new "/home/ciecet/media", users,
     ["굿모닝 팝스"] => [:podcast, "http://tune.kbs.co.kr/rss/1.xml"],
     ["나꼼수"] => [:podcast, "http://old.ddanzi.com/appstream/ddradio.xml"],
     ["시사 포커스"] => [:podcast, "http://minicast.imbc.com/PodCast/pod.aspx?code=1000674100000100000"],
@@ -16,13 +17,14 @@ mbrowser = MediaBrowser.new "/home/ciecet/media",
     ["Listen & Play"] => [:podcast, "http://downloads.bbc.co.uk/podcasts/radio/listenplay/rss.xml"],
     ["office"] => [:remote, "http://192.168.10.3/media"]
 
-users = ["ciecet@gmail.com", "okie9090@gmail.com"]
-
 map = WebApp::AppMap.new \
+    "/auth" => Session.new(WebApp::Dump.new),
     "/test" => WebApp::Dump.new,
     "/doc" => Session.new(WebApp::Dir.new("/home/ciecet/doc"), users),
-    "/media" => Session.new(mbrowser, users),
+    "/media" => Session.new(mbrowser),
+    "/public" => DummySession.new(mbrowser, "anyone"),
     "/sendkin" => SendKin.new
+#    "/mediatest" => DummySession.new(mbrowser, "ciecet@gmail.com"),
 #    "/mediatest" => mbrowser,
 
 WebApp::SCGI.new(9000).run map

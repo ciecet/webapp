@@ -8,8 +8,9 @@ require 'stringio'
 
 class MediaBrowser
 
-    def initialize src=".", pathmap={}
+    def initialize src=".", admins=nil, pathmap={}
         @source = src
+        @admins = admins
         @pathmap = pathmap
     end
 
@@ -27,13 +28,42 @@ class MediaBrowser
         end
     end
 
-    def call ctx
-        io = ctx.io
+    def granted? path, user
+        File.file?(File.dirname(path)+
+                "/.cache/user:#{user}/read:#{File.basename(path)}")
+    end
 
+    def checkbox hostpath, urlpath, user
+        g = granted?(hostpath, user)
+        %(<input style="width:20px;height:20px;" type="checkbox" #{
+            "checked='checked'" if g
+        } onclick="request('/#{urlpath}?a=1&o=ac&m=#{
+            "r" unless g
+        }&u=#{user}','')"></input> )
+    end
+
+    def call ctx
         op = ctx.queries["o"]
         ap = ctx.vars['APP_PATH'] - ['.cache']
         bp = ctx.vars['BASE_PATH']
         hostpath = ([@source]+ap).join("/")
+        privileged = false
+        invitee = nil
+
+        user = ctx.vars['SESSION_USER']
+        if !@admins || @admins.include?(user)
+            privileged = true
+            invitee = ctx.cookies["invitee"]
+            invitee = ctx.queries["invitee"] if ctx.queries.include?("invitee")
+            if invitee && !(invitee == 'anyone' ||
+                    invitee =~ /^[a-zA-Z0-9.]+@[a-zA-Z0-9.]+$/)
+                invitee = nil
+            end
+        else
+            unless ap.empty? || granted?(hostpath, user)
+                throw "Access denied for user:#{user}"
+            end
+        end
 
         unless op
             sp = @pathmap[ap]
@@ -69,7 +99,7 @@ class MediaBrowser
             begin
                 pipe = IO.pipe
                 pid = Process.spawn("mpg123 -s --list - | lame -r --vbr-new #{
-                        lowopt} - -", :in => pipe[0], :out => io)
+                        lowopt} - -", :in => pipe[0], :out => ctx.io)
                 each_mp3(hostpath) { |mp3f|
                     pipe[1].puts mp3f
                 }
@@ -77,11 +107,59 @@ class MediaBrowser
                 pipe[1].close
                 Process.detach(pid)
             end
+        when "ac"
+            throw "Unauthorized" unless invitee
+            dir = File.dirname(hostpath)+"/.cache/user:#{invitee}"
+            file = dir+"/read:#{File.basename(hostpath)}"
+            case ctx.queries['m']
+            when "r"
+                FileUtils.mkdir_p(dir)
+                open(file, "w") {|f|} # touch
+            else
+                File.unlink(file)
+            end
+            ctx.reply 200
         when "browse"
             out = StringIO.new
             out << "<html><head><meta http-equiv='content-type' content='text/html; charset=UTF-8' /><meta name='viewport' content='width=device-width, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no'/><title>"
             out << ap.join(" / ").to_html
-            out << %(</title></head><body style="font-size:200%;">)
+            out << %(</title></head><body>)
+
+            if privileged
+                out << %(<div style='font-size:150%;position:absolute;top:20px;right:20px;float:right;'><a href="?invitee=#{"anyone" unless invitee}">(#{invitee ? "-" : "+"})</a></div>)
+            end
+
+            if invitee
+                out << %{<script type="text/javascript">
+                    function request (url, msg) {
+                        if (window.XMLHttpRequest) {
+                            req = new XMLHttpRequest();
+                        } else if (window.ActiveXObject) {
+                            req = new ActiveXObject("Microsoft.XMLHTTP");
+                        }
+                        req.open('POST', url, true);
+                        req.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+                        req.onreadystatechange = function () {
+                            if (req.readyState != 4) return;
+                            if (req.status != 200) {
+                                alert("Failed to send "+msg);
+                            }
+                        };
+                        req.send(msg);
+                    }
+                </script>}.htrim
+                out << "<div style='background-color:orange;padding:10px;'>"
+                out << %{Access control for <b>#{invitee.to_html}</b>.<br/>(change to: <input type='text' name='invitee' onchange='window.location.replace("?invitee="+value);'></input> }
+                Dir.new(hostpath+"/.cache").sort.each { |e|
+                    next unless e =~ /user:(.*)/
+                    u = $1
+                    next if u == invitee
+                    out << %(<a href="?invitee=#{$1}">#{$1.to_html}</a> )
+                } if File.directory?(hostpath+"/.cache")
+                out << ")</div>"
+            end
+
+            out << %(<span style="font-size:150%;">)
             out2 = []
             out2 << %(<a href="/#{bp.join("/").to_http}">HOME</a>)
             ap.each_index { |i|
@@ -89,12 +167,19 @@ class MediaBrowser
             }
             out << %(<h2>#{out2.join(" / ")}</h2>)
 
-            @pathmap.each {|k,v|
-                next unless k[0...-1] == ap
-                out << %(<b>[#{v[0].to_s.upcase}]<b> <a href="/#{(bp+k).join("/").to_http}">#{k.last.to_html}</a><br>)
-            }
+            if privileged
+                @pathmap.each {|k,v|
+                    next unless k[0...-1] == ap
+                    out << %(<b>[#{v[0].to_s.upcase}]<b> <a href="/#{(bp+k).join("/").to_http}">#{k.last.to_html}</a><br>)
+                }
+            end
 
             entries = Dir.new(hostpath).sort - [".", ".."]
+            unless privileged
+                entries = entries.find_all { |e|
+                    granted?(hostpath+"/#{e}", user)
+                }
+            end
             dirs = entries.find_all {|e| File.directory?(hostpath+"/"+e)}
             images = entries.find_all {|e| e =~ /\.(jpg|png|gif|bmp)$/i }
             mp3s = entries.find_all {|e| e=~ /\.mp3$/i }
@@ -102,7 +187,11 @@ class MediaBrowser
 
             dirs.each { |e|
                 next if e =~ /^\./
-                out << %(<b>[FOLDER]</b> <a href="/#{(bp+ap+[e]).join("/").to_http}">#{e.to_html}</a><br>)
+                p = (bp+ap+[e]).join("/").to_http
+                if invitee
+                    check = checkbox(hostpath+"/#{e}", p, invitee)
+                end
+                out << %(<b>[DIR]</b> #{check}<a href="/#{(bp+ap+[e]).join("/").to_http}">#{e.to_html}</a><br>)
             }
 
             cid = 0
@@ -137,16 +226,16 @@ class MediaBrowser
                     abr[12..-1] = ""
                 end
                 #out << %(<div style="position:relative;float:left;height:130px;overflow:hidden;" title="#{e.to_html}"><a href="?p=#{p}">)
-                out << %(<div style="position:relative;float:left;height:130px;overflow:hidden;" title="#{e.to_html}"><a onclick="showImage(#{cid});">)
-#                if File.file?("#{BASE_DIR}/cache/thumb/#{p}.jpg")
-#                    out << %(<image style="padding:1px;" src="#{env["BASE_URL"]}/#{WEBrick::HTTPUtils.escape("thumb/#{p}.jpg")}"></image>)
-#                else
-                    out << %(<image style="padding:1px;" src="/#{p}?o=thumbnail"></image>)
-#                end
-                out << %(</a>)
-                out << %(<div style="color:black;font-size:12px;position:absolute;top:3px;left:3px;">#{abr.to_html}</div>)
-                out << %(<a href="/#{p}" style="text-decoration:none"><div style="color:white;font-size:12px;position:absolute;top:2px;left:2px;">#{abr.to_html}</div></a>)
-                out << %(</div>)
+                check = checkbox(hostpath+"/#{e}", p, invitee) if invitee
+                out << %{
+                    <div style="position:relative;float:left;height:130px;overflow:hidden;" title="#{e.to_html}">
+                        <a onclick="showImage(#{cid});">
+                            <image style="padding:1px;" src="/#{p}?o=thumbnail"></image>
+                        </a>
+                        <div style="color:black;font-size:12px;position:absolute;top:3px;left:3px;">#{check}#{abr.to_html}</div>
+                        <a href="/#{p}" style="text-decoration:none"><div style="color:white;font-size:12px;position:absolute;top:2px;left:2px;">#{check}#{abr.to_html}</div></a>
+                    </div>
+                }.htrim
                 cid += 1
             }
             out << %(<div style="clear:both;"></div>)
@@ -159,7 +248,8 @@ class MediaBrowser
 
             mp3s.each { |e|
                 p = (bp+ap+[e]).join("/").to_http
-                out << %(<a href="/#{p}">#{e.to_html}</a>)
+                check = checkbox(hostpath+"/#{e}", p, invitee) if invitee
+                out << %(#{check}<a href="/#{p}">#{e.to_html}</a>)
                 out << %( -- (<a href="/#{p}?o=playlistlow">low</a>))
                 out << %(<br>)
             }
@@ -174,20 +264,22 @@ class MediaBrowser
                     sizeh = sprintf("%.1f%s", size.to_f/1024, u)
                     size /= 1024
                 }
+                check = checkbox(hostpath+"/#{e}", p, invitee) if invitee
                 out << "<tr>"
-                out << %(<td align="right" style="padding-right:10px;">#{sizeh}</td><td><a href="/#{p}">#{e.to_html}</a></td>)
+                out << %(<td align="right" style="padding-right:10px;">#{sizeh}</td><td><a href="/#{p}">#{check}#{e.to_html}</a></td>)
                 out << "</tr>"
             }
             out << %(</table>)
 
-            out << "</body></html>"
+            out << "</span></body></html>"
 
             ctx.reply 200,
                 "Cache-Control: no-cache",
                 "Pragma: no-cache",
                 "Connection: close",
+                "Set-Cookie: invitee=#{invitee}; Path=/; HttpOnly",
                 "Content-Type: text/html"
-            io.puts out.string
+            ctx.io.puts out.string
         when "thumbnail"
             throw "Invalid thumbnail path" unless File.file?(hostpath)
             thumbdir = File.dirname(hostpath)+"/.cache"
@@ -206,7 +298,7 @@ class MediaBrowser
             out = StringIO.new
             out << "<html><head><meta http-equiv='content-type' content='text/html; charset=UTF-8' /><title>"
             out << ap.join(" / ").to_html
-            out << %(</title></head><body style="font-size:200%;">)
+            out << %(</title></head><body style="font-size:150%;">)
 
             out2 = []
             out2 << %(<a href="/#{bp.join("/").to_http}">HOME</a>)

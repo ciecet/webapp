@@ -48,7 +48,7 @@ class Context
     def readposts
         return if @posts
         cl = env['CONTENT_LENGTH']
-        return unless cl && env['REQUIRE_METHOD'] == "POST"
+        return unless cl && env['REQUEST_METHOD'] == "POST"
 
         @posts = {}
         @io.recv(cl.to_i).split("\n").each { |l|
@@ -85,18 +85,18 @@ class SCGI
                     throw "No trailing comma" unless io.recv(1) == ","
                     ctx = Context.new(io, Hash[*h.split("\0")])
                     app.call ctx
+                    throw "No response from application" unless ctx.replied
                 rescue
-                    if ctx.replied
-                        puts $!.message
-                        puts $!.backtrace.join("\n")
-                    else
+                    puts $!.message
+                    puts $!.backtrace.join("\n")
+                    unless ctx.replied
                         ctx.reply 500, "Content-Type: text/html"
                         ctx.io.puts %{
                             <html><title>#{$!.message}</title><body>
                             <h1>500 Internal Server Error</h1>
                             <h2>#{$!.message.to_html}</h2>
                             <pre>#{$!.backtrace.join("\n").to_html}</pre>
-                            <h2>Values:</h2>
+                            <h2>Environments:</h2>
                             <pre>#{
                                 ctx.env.map{|k,v|"#{k} = #{v}"}.
                                 join("\n").to_html
@@ -120,6 +120,14 @@ class Dump
             <h2>Environments</h2>
             #{ctx.env.map{|k,v|
                 "<b>#{k.to_html}</b> = #{v.to_html}"
+            }.join("<br>")}
+            <h2>Queries</h2>
+            #{ctx.queries.map{|k,v|
+                "<b>#{k.to_html}</b> = #{v.to_html}"
+            }.join("<br>")}
+            <h2>Cookies</h2>
+            #{ctx.cookies.map{|k,v|
+                "<b>#{k.to_html}</b> = #{v.inspect.to_html}"
             }.join("<br>")}
             <h2>Variables</h2>
             #{ctx.vars.map{|k,v|
@@ -150,7 +158,7 @@ class AppMap
             return
         }
 
-        throw "No application found at #{(bp+ap).join("/")}"
+        throw "No application found for #{(bp+ap).join("/")}"
     end
 end
 
