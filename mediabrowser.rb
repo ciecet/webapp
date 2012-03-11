@@ -162,7 +162,11 @@ class MediaBrowser
             out2 = []
             out2 << %(<a href="/#{bp.join("/").to_http}">HOME</a>)
             ap.each_index { |i|
-                out2 << %(<a href="/#{(bp+ap[0..i]).join("/").to_http}">#{ap[i].to_html}</a>)
+                p = (bp+ap[0..i]).join("/").to_http
+                if invitee
+                    check = checkbox(([@source]+ap[0..i]).join("/"), p, invitee)
+                end
+                out2 << %(#{check}<a href="/#{p}">#{ap[i].to_html}</a>)
             }
             out << %(<h2>#{out2.join(" / ")}</h2>)
 
