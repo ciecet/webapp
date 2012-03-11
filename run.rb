@@ -18,13 +18,9 @@ mbrowser = MediaBrowser.new "/home/ciecet/media", users,
     ["office"] => [:remote, "http://192.168.10.3/media"]
 
 map = WebApp::AppMap.new \
-    "/auth" => Session.new(WebApp::Dump.new),
     "/test" => WebApp::Dump.new,
     "/doc" => Session.new(WebApp::Dir.new("/home/ciecet/doc"), users),
     "/media" => Session.new(mbrowser),
-    "/public" => DummySession.new(mbrowser, "anyone"),
     "/sendkin" => SendKin.new
-#    "/mediatest" => DummySession.new(mbrowser, "ciecet@gmail.com"),
-#    "/mediatest" => mbrowser,
 
 WebApp::SCGI.new(9000).run map

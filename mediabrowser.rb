@@ -124,9 +124,11 @@ class MediaBrowser
             out << ap.join(" / ").to_html
             out << %(</title></head><body>)
 
+            out << %(<div style='font-size:150%;position:absolute;top:20px;right:20px;float:right;text-align:right;background-color:rgba(255,255,255,0.5);'>)
             if privileged
-                out << %(<div style='font-size:150%;position:absolute;top:20px;right:20px;float:right;'><a href="?invitee=#{"anyone" unless invitee}">(#{invitee ? "-" : "+"})</a></div>)
+                out << %([<a href="?invitee=#{"anyone" unless invitee}">#{invitee ? "-" : "+"}</a>])
             end
+            out << %(#{ctx.vars['SESSION_HTML']}</div>)
 
             if invitee
                 out << %{<script type="text/javascript">
