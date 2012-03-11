@@ -71,6 +71,7 @@ class SCGI
         app = p unless app
         loop do
             Thread.start(@server.accept) { |io|
+                ctx = nil
                 begin
                     h = io.recv(10).split(":")
                     h = h[1]+io.recv(h[0].to_i - h[1].size)
@@ -81,7 +82,7 @@ class SCGI
                 rescue
                     puts $!.message
                     puts $!.backtrace.join("\n")
-                    unless ctx.replied
+                    unless ctx && ctx.replied
                         ctx.reply 500, "Content-Type: text/html"
                         ctx.io.puts %{
                             <html><title>#{$!.message}</title><body>

@@ -124,11 +124,11 @@ class MediaBrowser
             ctx.reply 200
         when "browse"
             out = StringIO.new
-            out << "<html><head><meta http-equiv='content-type' content='text/html; charset=UTF-8' /><meta name='viewport' content='width=device-width, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no'/><title>"
+            out << "<!DOCTYPE html><html><head><meta http-equiv='content-type' content='text/html; charset=UTF-8' /><meta name='viewport' content='width=device-width, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no'/><title>"
             out << ap.join(" / ").to_html
-            out << %(</title></head><body>)
+            out << %(</title></head><body style='font-size:150%;'>)
 
-            out << %(<div style='font-size:150%;position:absolute;top:20px;right:20px;float:right;text-align:right;background-color:rgba(255,255,255,0.5);'>)
+            out << %(<div style='position:absolute;top:20px;right:20px;float:right;text-align:right;background-color:rgba(255,255,255,0.7);'>)
             if privileged
                 out << %([<a href="?invitee=#{"anyone" unless invitee}">#{invitee ? "-" : "+"}</a>])
             end
@@ -164,7 +164,6 @@ class MediaBrowser
                 out << ")</div>"
             end
 
-            out << %(<span style="font-size:150%;">)
             out2 = []
             out2 << %(<a href="/#{bp.join("/").to_http}">HOME</a>)
             ap.each_index { |i|
@@ -212,7 +211,7 @@ class MediaBrowser
                 d = document.getElementById("imageframe");
                 if (id < 0 || id >= imagePaths.length) {
                     d.innerHTML = "";
-                    d.style.display = "none";
+                    d.style.visibility = "hidden";
                     return;
                 }
 
@@ -224,10 +223,10 @@ class MediaBrowser
                 ihtml += "<div style='width:20%;height:100%;position:absolute;left:0%;' onclick='showImage("+(id-1)+");'></div>";
                 ihtml += "<div style='width:20%;height:100%;position:absolute;right:0%;' onclick='showImage("+(id+1)+");'></div>";
                 d.innerHTML = ihtml;
-                d.style.display = "inherit";
+                d.style.visibility = "visible";
             }}.htrim
             out << %(</script>)
-            out << %(<div style="z-index:9999;display:none;background-color:rgba(0,0,0,0.5);position:fixed;top:0%;bottom:0%;left:0%;right:0%;overflow:hidden;" id="imageframe"></div>)
+            out << %(<div style="z-index:9999;visibility:hidden;background-color:rgba(0,0,0,0.5);position:fixed;top:0%;bottom:0%;left:0%;right:0%;overflow:hidden;" id="imageframe"></div>)
             images.each { |e|
                 p = (bp+ap+[e]).join("/").to_http
                 abr = e[0...-4]
@@ -280,7 +279,7 @@ class MediaBrowser
             }
             out << %(</table>)
 
-            out << "</span></body></html>"
+            out << "</body></html>"
 
             ctx.reply 200,
                 "Cache-Control: no-cache",
@@ -305,7 +304,7 @@ class MediaBrowser
             WebApp::File.new(thumbfile, "image/jpeg").call ctx
         when "browsepodcast"
             out = StringIO.new
-            out << "<html><head><meta http-equiv='content-type' content='text/html; charset=UTF-8' /><title>"
+            out << "<!DOCTYPE html><html><head><meta http-equiv='content-type' content='text/html; charset=UTF-8' /><title>"
             out << ap.join(" / ").to_html
             out << %(</title></head><body style="font-size:150%;">)
 
