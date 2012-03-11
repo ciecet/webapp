@@ -27,17 +27,21 @@ class MediaBrowser
         end
     end
 
-    def granted? path, user
+    def canread? path, user
+        checkread(path, user) || checkread(path, "anyone")
+    end
+
+    def checkread path, user
         File.file?(File.dirname(path)+
                 "/.cache/user:#{user}/read:#{File.basename(path)}")
     end
 
     def checkbox hostpath, urlpath, user
-        g = granted?(hostpath, user)
+        r = checkread(hostpath, user)
         %(<input style="width:20px;height:20px;" type="checkbox" #{
-            "checked='checked'" if g
+            "checked='checked'" if r
         } onclick="request('/#{urlpath}?a=1&o=ac&m=#{
-            "r" unless g
+            "r" unless r
         }&u=#{user}','')"></input> )
     end
 
@@ -59,7 +63,7 @@ class MediaBrowser
                 invitee = nil
             end
         else
-            unless ap.empty? || granted?(hostpath, user)
+            unless ap.empty? || canread?(hostpath, user)
                 throw "Access denied for user:#{user}"
             end
         end
@@ -182,7 +186,7 @@ class MediaBrowser
             entries = Dir.new(hostpath).sort - [".", ".."]
             unless privileged
                 entries = entries.find_all { |e|
-                    granted?(hostpath+"/#{e}", user)
+                    canread?(hostpath+"/#{e}", user)
                 }
             end
             dirs = entries.find_all {|e| File.directory?(hostpath+"/"+e)}
