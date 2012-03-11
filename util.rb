@@ -34,7 +34,7 @@ class String
         '<>#%"'+
         '{}|\\^[]`'+
         (0x80..0xff).collect{|c| c.chr }.join+
-        '()'
+        '()'+"'"
     )}])/n
 
     def to_http()

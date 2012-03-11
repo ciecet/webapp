@@ -45,6 +45,24 @@ class MediaBrowser
         }&u=#{user}','')"></input> )
     end
 
+    def audioPlayer
+        %{
+            <script type="text/javascript">
+                function playAudio(url) {
+                    p = document.getElementById("audioframe");
+                    ihtml = '<audio id="audioplayer" style="width:100%;" controls="controls" preload="auto" autoplay="autoplay" src="'+url+'"></audio>';
+                    p.innerHTML = ihtml;
+                    p.style.visibility = "visible";
+
+                    p = document.getElementById("audioplayer");
+                    p.play();
+                    return false;
+                }
+            </script>
+            <div style="z-index:9998;visibility:hidden;background-color:rgba(255,255,255,0.7);position:fixed;bottom:2%;left:2%;right:2%;overflow:hidden;" id="audioframe"></div>
+        }.htrim 
+    end
+
     def call ctx
         op = ctx.queries["o"]
         ap = ctx.vars['APP_PATH'] - ['.cache']
@@ -202,32 +220,33 @@ class MediaBrowser
                 out << %(<b>[DIR]</b> #{check}<a href="/#{(bp+ap+[e]).join("/").to_http}">#{e.to_html}</a><br>)
             }
 
-            cid = 0
-            out << %(<script type="text/javascript">)
-            out << %(imagePaths = [ #{images.map{|e|(bp+ap+[e]).join("/").to_http.inspect}.join(", ")} ];)
-            out << %(imageNames = [ #{images.map{|e|"'"+e.to_html.gsub("'","\\'")+"'"}.join(", ")} ];)
-            out << %q{
-            function showImage(id) {
-                d = document.getElementById("imageframe");
-                if (id < 0 || id >= imagePaths.length) {
-                    d.innerHTML = "";
-                    d.style.visibility = "hidden";
-                    return;
-                }
+            out << %{
+            <script type="text/javascript">
+                imagePaths = [ #{images.map{|e|([""]+bp+ap+[e]).join("/").to_http.inspect}.join(", ")} ];
+                imageNames = [ #{images.map{|e|"'"+e.to_html.gsub("'","\\'")+"'"}.join(", ")} ];
+                function showImage(i) {
+                    d = document.getElementById("imageframe");
+                    if (i < 0 || i >= imagePaths.length) {
+                        d.innerHTML = "";
+                        d.style.visibility = "hidden";
+                        return;
+                    }
 
-                ihtml = "";
-                ihtml +="<div style='position:absolute;left:2%;top:2%;width:96%;height:96%;background:url(/"+imagePaths[id]+"?o=thumbnail);background-size:contain;background-repeat:no-repeat;background-position:center center;background-origin:content-box;'></div>";
-                ihtml += "<div style='position:absolute;left:2%;top:2%;width:96%;height:96%;text-align:center;background:url(/"+imagePaths[id]+");background-size:contain;background-repeat:no-repeat;background-position:center center;background-origin:content-box;'>";
-                ihtml += "<center><a style='color:white;background-color:rgba(0,0,0,0.5);' href='/"+imagePaths[id]+"'>"+imageNames[id]+"</a></center></div>";
-                ihtml += "<div style='width:60%;height:90%;position:absolute;top:10%;left:20%;' onclick='showImage(-1);'></div>";
-                ihtml += "<div style='width:20%;height:100%;position:absolute;left:0%;' onclick='showImage("+(id-1)+");'></div>";
-                ihtml += "<div style='width:20%;height:100%;position:absolute;right:0%;' onclick='showImage("+(id+1)+");'></div>";
-                d.innerHTML = ihtml;
-                d.style.visibility = "visible";
-            }}.htrim
-            out << %(</script>)
-            out << %(<div style="z-index:9999;visibility:hidden;background-color:rgba(0,0,0,0.5);position:fixed;top:0%;bottom:0%;left:0%;right:0%;overflow:hidden;" id="imageframe"></div>)
-            images.each { |e|
+                    ihtml = "";
+                    ihtml +="<div style='position:absolute;left:2%;top:2%;width:96%;height:96%;background:url("+imagePaths[i]+"?o=thumbnail);background-size:contain;background-repeat:no-repeat;background-position:center center;background-origin:content-box;'></div>";
+                    ihtml += "<div style='position:absolute;left:2%;top:2%;width:96%;height:96%;text-align:center;background:url("+imagePaths[i]+");background-size:contain;background-repeat:no-repeat;background-position:center center;background-origin:content-box;'>";
+                    ihtml += "<center><a style='color:white;background-color:rgba(0,0,0,0.5);' href='"+imagePaths[i]+"'>"+imageNames[i]+"</a></center></div>";
+                    ihtml += "<div style='width:60%;height:90%;position:absolute;top:10%;left:20%;' onclick='showImage(-1);'></div>";
+                    ihtml += "<div style='width:20%;height:100%;position:absolute;left:0%;' onclick='showImage("+(i-1)+");'></div>";
+                    ihtml += "<div style='width:20%;height:100%;position:absolute;right:0%;' onclick='showImage("+(i+1)+");'></div>";
+                    d.innerHTML = ihtml;
+                    d.style.visibility = "visible";
+                }
+            </script>
+            <div style="z-index:9999;visibility:hidden;background-color:rgba(0,0,0,0.5);position:fixed;top:0%;bottom:0%;left:0%;right:0%;overflow:hidden;" id="imageframe"></div>
+            }.htrim if images.size > 0
+            images.each_index { |i|
+                e = images[i]
                 p = (bp+ap+[e]).join("/").to_http
                 abr = e[0...-4]
                 if abr.length > 12
@@ -237,28 +256,30 @@ class MediaBrowser
                 check = checkbox(hostpath+"/#{e}", p, invitee) if invitee
                 out << %{
                     <div style="position:relative;float:left;height:130px;overflow:hidden;" title="#{e.to_html}">
-                        <a onclick="showImage(#{cid});">
+                        <a onclick="showImage(#{i});">
                             <image style="padding:1px;" src="/#{p}?o=thumbnail"></image>
                         </a>
                         <div style="color:black;font-size:12px;position:absolute;top:3px;left:3px;">#{check}#{abr.to_html}</div>
                         <a href="/#{p}" style="text-decoration:none"><div style="color:white;font-size:12px;position:absolute;top:2px;left:2px;">#{check}#{abr.to_html}</div></a>
                     </div>
                 }.htrim
-                cid += 1
             }
             out << %(<div style="clear:both;"></div>)
 
+            out << audioPlayer if mp3s.size > 0
             if mp3s.size > 1
                 p = (bp+ap).join("/").to_http
-                out << %(<h3><a href="/#{p}?o=playlist">PlayAll</a>)
-                out << %( (<a href="/#{p}?o=playlistlow">Low</a>)</h3>)
+                #out << %(<h3><a href="/#{p}?o=playlist">PlayAll</a>)
+                out << %(<h3><a href="/#{p}?o=playlist" onclick="return playAudio(href);">PlayAll</a>)
+                out << %( (<a href="/#{p}?o=playlistlow" onclick="return playAudio(href);">Low</a>)</h3>)
             end
 
-            mp3s.each { |e|
+            mp3s.each_index { |i|
+                e = mp3s[i]
                 p = (bp+ap+[e]).join("/").to_http
                 check = checkbox(hostpath+"/#{e}", p, invitee) if invitee
-                out << %(#{check}<a href="/#{p}">#{e.to_html}</a>)
-                out << %( -- (<a href="/#{p}?o=playlistlow">low</a>))
+                out << %(#{check}<a href="/#{p}" onclick="return playAudio(href);">#{e.to_html}</a>)
+                out << %( -- (<a href="/#{p}?o=playlistlow" onclick="return playAudio(href);">low</a>))
                 out << %(<br>)
             }
 
@@ -278,7 +299,7 @@ class MediaBrowser
                 out << "</tr>"
             }
             out << %(</table>)
-
+            out << %(<br/>)*2
             out << "</body></html>"
 
             ctx.reply 200,
@@ -314,6 +335,7 @@ class MediaBrowser
                 out2 << %(<a href="/#{(bp+ap[0..i]).join("/").to_http}">#{ap[i].to_html}</a>)
             }
             out << %(<h2>#{out2.join(" / ")}</h2>)
+            out << audioPlayer
             xml = REXML::Document.new(`curl -s '#{@pathmap[ap][1]}'`.force_encoding("ASCII-8BIT"))
             REXML::XPath.each(xml.root, "//item") { |e|
                 l = []
@@ -323,8 +345,11 @@ class MediaBrowser
                 next unless l.size == 2
                 #p = [safe_encode(ap[0]), safe_encode(l[1])].join("/")
                 #out << %(<b>[EPISODE]</b> <a href="?o=playpodcast&p=#{p}">#{l[0].to_html}</a>)
-                out << %(<b>[EPISODE]</b> <a href="#{l[1]}">#{l[0].to_html}</a><br>)
+                out << %(<b>[EPISODE]</b> <a href="#{l[1]}" onclick="#{
+                    'return playAudio(href);' if l[1] =~ /\.mp3$/i
+                }">#{l[0].to_html}</a><br>)
             }
+            out << "<br/>"*2;
             out << "</body></html>"
 
             ctx.reply 200,
