@@ -1,6 +1,5 @@
 require 'socket'
 require 'stringio'
-require 'webrick/httputils'
 
 module WebApp
 
@@ -19,28 +18,21 @@ class Context
         @io = io
         @env = env
         @replied = false
+        @queries = {}
+        @cookies = {}
         @vars = {}
 
-        qs = env["QUERY_STRING"]
-        if qs
-            @queries = {}
-            qs.split("&").each { |kv|
-                (k,v) = kv.split("=",2)
-                @queries[k] = WEBrick::HTTPUtils::unescape(v) if v
-            }
-        end
+        (env["QUERY_STRING"] || "").split("&").each { |kv|
+            (k,v) = kv.split("=",2)
+            @queries[k] = v.from_http if v
+        }
 
-        hc = env["HTTP_COOKIE"]
-        if hc
-            @cookies = {}
-            hc.split("; ").each { |kv|
-                (k,v) = kv.split("=",2)
-                @cookies[k] = v if v
-            }
-        end
+        (env["HTTP_COOKIE"] || "").split("; ").each { |kv|
+            (k,v) = kv.split("=",2)
+            @cookies[k] = v.from_http if v
+        }
 
-        du = WEBrick::HTTPUtils::unescape(env['DOCUMENT_URI']).
-                force_encoding("utf-8")
+        du = env['DOCUMENT_URI'].from_http
         @vars['APP_PATH'] = du.split("/") - ["", ".", ".."]
         @vars['BASE_PATH'] = []
     end
@@ -53,7 +45,7 @@ class Context
         @posts = {}
         @io.recv(cl.to_i).split("\n").each { |l|
             (k,v) = l.split("=",2)
-            @posts[k] = WEBrick::HTTPUtils::unescape(v) if v
+            @posts[k] = v.from_http if v
         }
     end
 

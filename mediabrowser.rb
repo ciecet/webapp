@@ -1,6 +1,5 @@
 require 'util'
 require 'webapp'
-require 'webrick/httputils'
 require "rexml/document"
 require 'rexml/xpath'
 require 'fileutils'
@@ -206,7 +205,7 @@ class MediaBrowser
                     d.style.display = "none";
                     return;
                 }
-                
+
                 ihtml = "";
                 ihtml +="<div style='position:absolute;left:2%;top:2%;width:96%;height:96%;background:url(/"+imagePaths[id]+"?o=thumbnail);background-size:contain;background-repeat:no-repeat;background-position:center center;background-origin:content-box;'></div>";
                 ihtml += "<div style='position:absolute;left:2%;top:2%;width:96%;height:96%;text-align:center;background:url(/"+imagePaths[id]+");background-size:contain;background-repeat:no-repeat;background-position:center center;background-origin:content-box;'>";

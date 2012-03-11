@@ -27,7 +27,21 @@ class String
     def htrim()
         self.gsub(/\s*\n\s*/, " ")
     end
+
+    HTTP_ESCAPE_CHARS = /([#{Regexp.escape(
+        (0x0..0x1f).collect{|c| c.chr }.join + "\x7f"+
+        " "+
+        '<>#%"'+
+        '{}|\\^[]`'+
+        (0x80..0xff).collect{|c| c.chr }.join+
+        '()'
+    )}])/n
+
     def to_http()
-        WEBrick::HTTPUtils.escape(self.force_encoding("ASCII-8BIT"))
+        self.force_encoding("ASCII-8BIT").gsub(HTTP_ESCAPE_CHARS) { |c| "%%%02x"%c.ord}
+    end
+
+    def from_http()
+        self.gsub(/%([0-9a-fA-F]{2})/) { |c| $1.hex.chr }.force_encoding("utf-8")
     end
 end

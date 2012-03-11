@@ -17,9 +17,14 @@ end
 
 class Session
 
-    @@sessions = {}
+    DBFILE="/tmp/session.cache"
 
-    def initialize app, users=nil, timeout=2*60*60
+    @@sessions = {}
+    if File.file?(DBFILE)
+        @@sessions = eval(File.read(DBFILE))
+    end
+
+    def initialize app, users=nil, timeout=24*60*60
         @app = app
         @users = users
         @timeout = timeout
@@ -34,8 +39,10 @@ class Session
         # Handle authentication
         sid = ctx.cookies["sid"]
         session = @@sessions[sid]
+
         if session
-            if (Time.now.to_i - session[:stime]) < @timeout
+            if (Time.now.to_i - session[:stime]) < @timeout &&
+                    ctx.queries["o"] != "logout"
                 if @users && !@users.include?(session[:email])
                     throw "Access denied. user:#{session[:email]}"
                 end
@@ -44,7 +51,7 @@ class Session
                 @app.call ctx
                 return
             end
-            @@sessions[sid] = nil
+            @@sessions.delete sid
         end
 
         sess = {}
@@ -77,9 +84,10 @@ class Session
             sid = sha1.hexdigest
 
             ctx.reply 302,
-                "Set-Cookie: sid=#{sid}; Path=/; HttpOnly",
+                "Set-Cookie: sid=#{sid}; Path=/; Max-Age=#{@timeout}; HttpOnly",
                 %(Location: #{curl})
             @@sessions[sid] = { :stime => stime, :email => email }
+            File.write(DBFILE, @@sessions.inspect)
         end
     end
 end
