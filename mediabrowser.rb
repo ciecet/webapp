@@ -140,6 +140,20 @@ class MediaBrowser
                 File.unlink(file)
             end
             ctx.reply 200
+        when "acdir"
+            throw "Unauthorized" unless invitee
+            dir = hostpath+"/.cache/access/#{invitee}"
+            case ctx.queries['m']
+            when "r"
+                FileUtils.mkdir_p(dir)
+                (Dir.new(hostpath).sort - [".", "..", ".cache"]).each { |fn|
+                    puts dir+"/#{fn}"
+                    open(dir+"/#{fn}", "w") {|f|}
+                }
+            else
+                FileUtils.rm_rf(dir)
+            end
+            ctx.reply 302, %(Location: http://#{ctx.env['HTTP_HOST']}/#{(bp+ap).join("/").to_http})
         when "browse"
             out = StringIO.new
             out << "<!DOCTYPE html><html><head><meta http-equiv='content-type' content='text/html; charset=UTF-8' /><meta name='viewport' content='width=device-width, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no'/><title>"
@@ -189,6 +203,7 @@ class MediaBrowser
                 end
                 out2 << %(#{check}<a href="/#{p}">#{ap[i].to_html}</a>)
             }
+            out2 << %([<a href="/#{(bp+ap).join("/").to_http}?o=acdir&m=r">All</a>|<a href="/#{(bp+ap).join("/").to_http}?o=acdir&m=">Clear</a>]) if invitee
             out << %(<h2>#{out2.join(" / ")}</h2>)
 
             if privileged
@@ -198,7 +213,7 @@ class MediaBrowser
                 }
             end
 
-            entries = Dir.new(hostpath).sort - [".", ".."]
+            entries = Dir.new(hostpath).sort - [".", "..", ".cache"]
             unless privileged
                 entries = entries.find_all { |e|
                     canread?(hostpath+"/#{e}", user)
