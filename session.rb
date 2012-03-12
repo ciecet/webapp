@@ -20,7 +20,9 @@ class Session
     end
 
     def save
-        File.write(DBFILE, @@sessions.inspect)
+        open(DBFILE, "w") { |f|
+            f.puts @@sessions.inspect
+        }
     end
 
     def call ctx
