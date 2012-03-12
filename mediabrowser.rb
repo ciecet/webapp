@@ -196,7 +196,7 @@ class MediaBrowser
             if privileged
                 @pathmap.each {|k,v|
                     next unless k[0...-1] == ap
-                    out << %(<b>[#{v[0].to_s.upcase}]<b> <a href="/#{(bp+k).join("/").to_http}">#{k.last.to_html}</a><br>)
+                    out << %(<b>[#{v[0].to_s.upcase}]</b> <a href="/#{(bp+k).join("/").to_http}">#{k.last.to_html}</a><br>)
                 }
             end
 
