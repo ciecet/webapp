@@ -33,7 +33,7 @@ class MediaBrowser
 
     def checkread path, user
         File.file?(File.dirname(path)+
-                "/.cache/user:#{user}/read:#{File.basename(path)}")
+                "/.cache/access/#{user}/#{File.basename(path)}")
     end
 
     def checkbox hostpath, urlpath, user
@@ -130,8 +130,8 @@ class MediaBrowser
             end
         when "ac"
             throw "Unauthorized" unless invitee
-            dir = File.dirname(hostpath)+"/.cache/user:#{invitee}"
-            file = dir+"/read:#{File.basename(hostpath)}"
+            dir = File.dirname(hostpath)+"/.cache/access/#{invitee}"
+            file = dir+"/#{File.basename(hostpath)}"
             case ctx.queries['m']
             when "r"
                 FileUtils.mkdir_p(dir)
@@ -173,12 +173,10 @@ class MediaBrowser
                 </script>}.htrim
                 out << "<div style='background-color:orange;padding:10px;'>"
                 out << %{Access control for <b>#{invitee.to_html}</b>.<br/>(change to: <input type='text' name='invitee' onchange='window.location.replace("?invitee="+value);'></input> }
-                Dir.new(hostpath+"/.cache").sort.each { |e|
-                    next unless e =~ /user:(.*)/
-                    u = $1
-                    next if u == invitee
-                    out << %(<a href="?invitee=#{$1}">#{$1.to_html}</a> )
-                } if File.directory?(hostpath+"/.cache")
+                (Dir.new(hostpath+"/.cache/access").sort -
+                        [".", "..", invitee]).each { |e|
+                    out << %(<a href="?invitee=#{e.to_http}">#{e.to_html}</a> )
+                } if File.directory?(hostpath+"/.cache/access")
                 out << ")</div>"
             end
 
@@ -311,12 +309,13 @@ class MediaBrowser
             ctx.io.puts out.string
         when "thumbnail"
             throw "Invalid thumbnail path" unless File.file?(hostpath)
-            thumbdir = File.dirname(hostpath)+"/.cache"
-            thumbfile = thumbdir+"/thumb:"+ap.last
+            cachedir = File.dirname(hostpath)+"/.cache"
+            thumbdir = cachedir+"/thumb"
+            thumbfile = thumbdir+"/#{ap.last}"
 
             unless File.file?(thumbfile)
                 FileUtils.mkdir_p(thumbdir)
-                open(thumbdir+"/lock:", "w") { |f|
+                open(cachedir+"/lock", "w") { |f|
                     f.flock(File::LOCK_EX)
                     system("convert", "-resize", "128x128", hostpath, thumbfile)
                 }
