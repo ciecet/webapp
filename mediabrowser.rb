@@ -7,10 +7,9 @@ require 'stringio'
 
 class MediaBrowser
 
-    def initialize src=".", admins=nil, pathmap={}
+    def initialize src=".", admins=nil
         @source = src
         @admins = admins
-        @pathmap = pathmap
     end
 
     def each_mp3 path, &proc
@@ -87,20 +86,13 @@ class MediaBrowser
         end
 
         unless op
-            sp = @pathmap[ap]
-            if sp
-                case sp[0]
-                when :podcast
-                    op = "browsepodcast"
-                when :remote
-                    op = "remote"
-                end
-            else
-                if File.file?(hostpath)
-                    op = "static"
-                elsif File.directory?(hostpath)
-                    op = "browse"
-                end
+            if File.file?(hostpath)
+                op = case hostpath
+                when /\.pod$/; "browsepodcast"
+                when /\.url$/; "remote"
+                else; "static" end
+            elsif File.directory?(hostpath)
+                op = "browse"
             end
         end
         raise "Invalid path" unless op
@@ -206,20 +198,14 @@ class MediaBrowser
             out2 << %([<a href="/#{(bp+ap).join("/").to_http}?o=acdir&m=r">All</a>|<a href="/#{(bp+ap).join("/").to_http}?o=acdir&m=">Clear</a>]) if invitee
             out << %(<h2>#{out2.join(" / ")}</h2>)
 
-            if privileged
-                @pathmap.each {|k,v|
-                    next unless k[0...-1] == ap
-                    out << %(<b>[#{v[0].to_s.upcase}]</b> <a href="/#{(bp+k).join("/").to_http}">#{k.last.to_html}</a><br>)
-                }
-            end
-
             entries = Dir.new(hostpath).sort - [".", "..", ".cache"]
             unless privileged
                 entries = entries.find_all { |e|
                     canread?(hostpath+"/#{e}", user)
                 }
             end
-            dirs = entries.find_all {|e| File.directory?(hostpath+"/"+e)}
+            dirs = entries.find_all {|e| File.directory?(hostpath+"/"+e) ||
+                    e =~ /\.(pod|url)$/i }
             images = entries.find_all {|e| e =~ /\.(jpg|png|gif|bmp)$/i }
             mp3s = entries.find_all {|e| e=~ /\.mp3$/i }
             etc = entries - dirs - images - mp3s
@@ -349,16 +335,18 @@ class MediaBrowser
                 out2 << %(<a href="/#{(bp+ap[0..i]).join("/").to_http}">#{ap[i].to_html}</a>)
             }
             out << %(<h2>#{out2.join(" / ")}</h2>)
+
             out << audioPlayer
-            xml = REXML::Document.new(`curl -s '#{@pathmap[ap][1]}'`.force_encoding("ASCII-8BIT"))
+
+            url = File.read(hostpath).chomp
+            # TODO: Could be a security hole.
+            xml = REXML::Document.new(`curl -s '#{url}'`.force_encoding("ASCII-8BIT"))
             REXML::XPath.each(xml.root, "//item") { |e|
                 l = []
                 REXML::XPath.each(e, 'title/text()|enclosure/@url') { |i|
                     l << i.value
                 }
                 next unless l.size == 2
-                #p = [safe_encode(ap[0]), safe_encode(l[1])].join("/")
-                #out << %(<b>[EPISODE]</b> <a href="?o=playpodcast&p=#{p}">#{l[0].to_html}</a>)
                 out << %(<b>[EPISODE]</b> <a href="#{l[1]}" onclick="#{
                     'return playAudio(href);' if l[1] =~ /\.mp3$/i
                 }">#{l[0].to_html}</a><br>)
@@ -372,12 +360,10 @@ class MediaBrowser
                 "Connection: close",
                 "Content-Type: text/html"
             ctx.io.puts out.string
-        when "playpodcast"
-            # guess content-type and stream
-            ctx.reply 302, %(Location: #{ap[1]})
         when "remote"
+            url = File.read(hostpath).chomp
             # guess content-type and stream
-            ctx.reply 302, %(Location: #{@pathmap[ap][1]})
+            ctx.reply 302, %(Location: #{url})
         else
             raise "Unknown operation:#{op}"
         end
