@@ -26,9 +26,9 @@ class Session
     end
 
     def call ctx
-        burl = %(http://#{ctx.env['HTTP_HOST']}/#{
+        burl = %(http://#{ctx.vars['HOST_ADDR']}/#{
             ctx.vars['BASE_PATH'].join("/").to_http})
-        curl = %(http://#{ctx.env['HTTP_HOST']}/#{
+        curl = %(http://#{ctx.vars['HOST_ADDR']}/#{
             (ctx.vars['BASE_PATH'] + ctx.vars['APP_PATH']).join("/").to_http})
 
         sid = ctx.cookies["sid"]

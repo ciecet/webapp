@@ -35,6 +35,12 @@ class Context
         du = env['DOCUMENT_URI'].from_http
         @vars['APP_PATH'] = du.split("/") - ["", ".", ".."]
         @vars['BASE_PATH'] = []
+
+        @vars['HOST_ADDR'] = env['HTTP_HOST']
+        unless env['SERVER_PORT'] == '80'
+            @vars['HOST_ADDR'] += ":"+env['SERVER_PORT']
+        end
+
     end
 
     def readposts
@@ -51,7 +57,8 @@ class Context
 
     def reply status, *headers
         o = StringIO.new
-        o << "Status: #{status} #{STATUS_MESSAGES[status]}\n"
+        #o << "Status: #{status} #{STATUS_MESSAGES[status]}\n"
+        o << "HTTP/1.1 #{status} #{STATUS_MESSAGES[status]}\n"
         headers.flatten.each { |h|
             o << h
             o << "\n"
@@ -77,6 +84,81 @@ class SCGI
                     h = h[1]+io.recv(h[0].to_i - h[1].size)
                     throw "No trailing comma" unless io.recv(1) == ","
                     ctx = Context.new(io, Hash[*h.split("\0")])
+                    app.call ctx
+                    throw "No response from application" unless ctx.replied
+                rescue
+                    puts $!.message
+                    puts $!.backtrace.join("\n")
+                    unless ctx && ctx.replied
+                        ctx.reply 500, "Content-Type: text/html"
+                        ctx.io.puts %{
+                            <html><title>#{$!.message}</title><body>
+                            <h1>500 Internal Server Error</h1>
+                            <h2>#{$!.message.to_html}</h2>
+                            <pre>#{$!.backtrace.join("\n").to_html}</pre>
+                            <h2>Environments:</h2>
+                            <pre>#{
+                                ctx.env.map{|k,v|"#{k} = #{v}"}.
+                                join("\n").to_html
+                            }</pre>
+                            </body></html>
+                        }.htrim
+                    end
+                ensure
+                    io.close
+                end
+            }
+        end
+    end
+end
+
+class Server
+    def initialize port=8080
+        @server = TCPServer.new("0.0.0.0", port)
+    end
+
+    def run app=nil, &p
+        app = p unless app
+        loop do
+            Thread.start(@server.accept) { |io|
+                ctx = nil
+                begin
+                    reqline = nil
+                    env = {}
+                    loop do
+                        l = io.readline.strip
+                        break if l.empty?
+
+                        unless reqline
+                            reqline = l
+                        else
+                            (k,v) = l.split(":", 2)
+                            next unless v
+                            env[k.strip.upcase] = v.strip
+                        end
+                    end
+
+                    (m,u,p) = reqline.split
+                    env["REQUEST_METHOD"] = m
+                    env["REQUEST_URI"] = u
+                    env["SERVER_PROTOCOL"] = p
+                    (u,q) = u.split("?", 2)
+                    env["DOCUMENT_URI"] = u
+                    env["QUERY_STRING"] = q || ""
+
+                    (_,p,_,ip) = io.peeraddr(:numeric)
+                    env["REMOTE_ADDR"] = ip
+                    env["REMOTE_PORT"] = p.to_s
+                    (_,p,_,ip) = io.addr(:numeric)
+                    env["HTTP_HOST"] = ip
+                    env["SERVER_PORT"] = p.to_s
+                    env["SERVER_NAME"] = "localhost"
+                    if env.has_key? "COOKIE"
+                        env["HTTP_COOKIE"] = env.delete "COOKIE"
+                    end
+
+                    ctx = Context.new(io, env)
+
                     app.call ctx
                     throw "No response from application" unless ctx.replied
                 rescue

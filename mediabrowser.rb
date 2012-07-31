@@ -145,7 +145,7 @@ class MediaBrowser
             else
                 FileUtils.rm_rf(dir)
             end
-            ctx.reply 302, %(Location: http://#{ctx.env['HTTP_HOST']}/#{(bp+ap).join("/").to_http})
+            ctx.reply 302, %(Location: http://#{ctx.vars['HOST_ADDR']}/#{(bp+ap).join("/").to_http})
         when "browse"
             out = StringIO.new
             out << "<!DOCTYPE html><html><head><meta http-equiv='content-type' content='text/html; charset=UTF-8' /><meta name='viewport' content='width=device-width, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no'/><title>"
