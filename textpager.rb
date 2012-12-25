@@ -73,15 +73,49 @@ class TextPager
         <script>
             var content = document.getElementById("content")
             var pageControl = document.getElementById("pageControl")
+            var pages = []
+            var xhr, currentPage
 
-            var showPage = function (pg) {
-                var xhr = new XMLHttpRequest()
-                xhr.open("GET", "?p="+pg, false)
+            var loadPage = function (pg, cb) {
+                var page = pages[pg]
+                if (page) {
+                    cb(page)
+                    return
+                }
+
+                if (xhr) return
+                xhr = new XMLHttpRequest()
+                xhr.open("GET", "?p="+pg)
+                xhr.onreadystatechange = function () {
+                    var req = xhr
+                    if (req.readyState != 4) return;
+                    xhr = undefined
+                    if (req.status == 200) {
+                        page = req.responseText
+                        pages[pg] = page
+                        cb(page)
+                        return
+                    }
+                    cb("Failed to load page")
+                }
                 xhr.send()
-                content.innerHTML = xhr.responseText + "<br/><br/><br/><br/>"
-                window.scrollTo(0,0)
+            }
+            var updatePage = function () {
+                var pg = currentPage
+                loadPage(pg, function(txt) {
+                    if (pg !== currentPage) {
+                        updatePage()
+                        return
+                    }
+                    content.innerHTML = txt + "<br/><br/><br/><br/>"
+                    window.scrollTo(0,0)
+                })
+            }
+            var showPage = function (pg) {
+                if (pg === currentPage) return
                 currentPage = pg
-                pageControl.innerHTML = ""+currentPage
+                pageControl.innerHTML = currentPage
+                updatePage()
             }
             var jumpPage = function () {
                 pg = parseInt(prompt("Page Number between 1~#{@numPages}"))
@@ -99,6 +133,13 @@ class TextPager
                     showPage(currentPage + 1)
                 }
             }
+            window.addEventListener("keydown", function (e) {
+                if (e.keyIdentifier === "Left") {
+                    prevPage()
+                } else if (e.keyIdentifier === "Right") {
+                    nextPage()
+                }
+            }, true)
             var lastPage = #{@numPages}
             showPage(1)
         </script>
