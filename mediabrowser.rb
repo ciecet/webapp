@@ -1,9 +1,10 @@
 require 'util'
-require 'webapp'
 require "rexml/document"
 require 'rexml/xpath'
 require 'fileutils'
 require 'stringio'
+require 'webapp'
+require 'textpager'
 
 class MediaBrowser
 
@@ -90,6 +91,7 @@ class MediaBrowser
                 op = case hostpath
                 when /\.pod$/; "browsepodcast"
                 when /\.url$/; "remote"
+                when /\.txt$/; "textpager"
                 else; "static" end
             elsif File.directory?(hostpath)
                 op = "browse"
@@ -100,6 +102,8 @@ class MediaBrowser
         case op
         when "static"
             WebApp::File.new(hostpath).call ctx
+        when "textpager"
+            TextPager.new(hostpath).call ctx
         when "playlist", "playlistlow"
             ctx.reply 200,
                 "Cache-Control: no-cache",
