@@ -12,9 +12,9 @@ class SendKin
             "Connection: close", 
             "Content-Type: text/javascript"
         begin
-            t = ctx.env['t'] or throw "No Title"
+            t = ctx.queries['t'] or throw "No Title"
             t.gsub!(%r(^\.+|/), "_")
-            u = ctx.env['u'] or throw "No URL"
+            u = ctx.queries['u'] or throw "No URL"
 
             Dir.mktmpdir { |workdir|
                 tpdf = workdir+"/sendkin.pdf"
