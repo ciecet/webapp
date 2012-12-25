@@ -198,7 +198,7 @@ class MediaBrowser
             out2 << %([<a href="/#{(bp+ap).join("/").to_http}?o=acdir&m=r">All</a>|<a href="/#{(bp+ap).join("/").to_http}?o=acdir&m=">Clear</a>]) if invitee
             out << %(<h2>#{out2.join(" / ")}</h2>)
 
-            entries = Dir.new(hostpath).sort - [".", "..", ".cache"]
+            entries = (Dir.new(hostpath).sort - [".", "..", ".cache"]).find_all { |e| File.exist?(hostpath+"/"+e) }
             unless privileged
                 entries = entries.find_all { |e|
                     canread?(hostpath+"/#{e}", user)
@@ -206,7 +206,7 @@ class MediaBrowser
             end
             dirs = entries.find_all {|e| File.directory?(hostpath+"/"+e) ||
                     e =~ /\.(pod|url)$/i }
-            images = entries.find_all {|e| e =~ /\.(jpg|png|gif|bmp)$/i }
+            images = entries.find_all {|e| e =~ /\.(jpeg|jpg|png|gif|bmp)$/i }
             mp3s = entries.find_all {|e| e=~ /\.mp3$/i }
             etc = entries - dirs - images - mp3s
 
