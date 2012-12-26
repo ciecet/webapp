@@ -67,7 +67,7 @@ class TextPager
         <div id="content"></div>
 
         <div id="prevBtn" class="btn" style="left:5%;bottom:5%">#{"<<".to_html}</div>
-        <div onclick="jumpPage()" id="pageControl" class="btn" style="left:47%;bottom:5%;"></div>
+        <div onclick="jumpPage()" id="pageControl" class="btn" style="left:45%;bottom:5%;"></div>
         <div id="nextBtn" class="btn" style="right:5%;bottom:5%">#{">>".to_html}</div>
 
         <script>

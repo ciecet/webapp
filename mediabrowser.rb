@@ -102,6 +102,8 @@ class MediaBrowser
         case op
         when "static"
             WebApp::File.new(hostpath).call ctx
+        when "raw"
+            WebApp::File.new(hostpath, "application/octet-stream").call ctx
         when "textpager"
             TextPager.new(hostpath).call ctx
         when "playlist", "playlistlow"
@@ -212,7 +214,8 @@ class MediaBrowser
                     e =~ /\.(pod|url)$/i }
             images = entries.find_all {|e| e =~ /\.(jpeg|jpg|png|gif|bmp)$/i }
             mp3s = entries.find_all {|e| e=~ /\.mp3$/i }
-            etc = entries - dirs - images - mp3s
+            txts = entries.find_all {|e| e=~ /\.txt$/i }
+            etc = entries - dirs - images - mp3s - txts
 
             dirs.each { |e|
                 next if e =~ /^\./
@@ -285,6 +288,26 @@ class MediaBrowser
                 out << %( -- (<a href="/#{p}?o=playlistlow" onclick="return playAudio(href);">low</a>))
                 out << %(<br>)
             }
+
+            out << %(<table style="font-size:100%;">)
+            txts.each { |e|
+                p = (bp+ap+[e]).join("/").to_http
+                size = File.size(hostpath+"/"+e)
+                sizeh = size.to_s
+                ["K", "M", "G"].each { |u|
+                    break if size < 1000
+                    sizeh = sprintf("%.1f%s", size.to_f/1024, u)
+                    size /= 1024
+                }
+                check = checkbox(hostpath+"/#{e}", p, invitee) if invitee
+                out << "<tr>"
+                out << %(<td align="right" style="padding-right:10px;">#{sizeh}</td><td>)
+                out << %(<a href="/#{p}">#{check}#{e.to_html}</a>)
+                out << %( (<a href="/#{p}?o=raw">raw</a>))
+                out << %(</td>)
+                out << "</tr>"
+            }
+            out << %(</table>)
 
             out << %(<table style="font-size:100%;">)
             etc.each { |e|
