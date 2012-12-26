@@ -66,9 +66,9 @@ class TextPager
 
         <div id="content"></div>
 
-        <div onclick="prevPage()" class="btn" style="left:5%;bottom:5%">#{"<<".to_html}</div>
+        <div id="prevBtn" class="btn" style="left:5%;bottom:5%">#{"<<".to_html}</div>
         <div onclick="jumpPage()" id="pageControl" class="btn" style="left:47%;bottom:5%;"></div>
-        <div onclick="nextPage()" class="btn" style="right:5%;bottom:5%">#{">>".to_html}</div>
+        <div id="nextBtn" class="btn" style="right:5%;bottom:5%">#{">>".to_html}</div>
 
         <script>
             var content = document.getElementById("content")
@@ -123,14 +123,20 @@ class TextPager
                     showPage(pg)
                 }
             }
-            var prevPage = function () {
+            var prevPage = function (e) {
                 if (currentPage > 1) {
                     showPage(currentPage - 1)
                 }
+                if (e) {
+                    e.preventDefault()
+                }
             }
-            var nextPage = function () {
+            var nextPage = function (e) {
                 if (currentPage < lastPage) {
                     showPage(currentPage + 1)
+                }
+                if (e) {
+                    e.preventDefault()
                 }
             }
             window.addEventListener("keydown", function (e) {
@@ -140,6 +146,12 @@ class TextPager
                     nextPage()
                 }
             }, true)
+            var prevBtn = document.getElementById("prevBtn")
+            prevBtn.addEventListener("click", prevPage, true)
+            prevBtn.addEventListener("touchstart", prevPage, true)
+            var nextBtn = document.getElementById("nextBtn")
+            nextBtn.addEventListener("click", nextPage, true)
+            nextBtn.addEventListener("touchstart", nextPage, true)
             var lastPage = #{@numPages}
             showPage(1)
         </script>
