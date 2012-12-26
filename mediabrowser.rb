@@ -91,7 +91,7 @@ class MediaBrowser
                 op = case hostpath
                 when /\.pod$/; "browsepodcast"
                 when /\.url$/; "remote"
-                when /\.txt$/; "textpager"
+                when /\.txt$/i; "textpager"
                 else; "static" end
             elsif File.directory?(hostpath)
                 op = "browse"
