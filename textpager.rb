@@ -62,13 +62,15 @@ class TextPager
             }
         </style>
     </head>
-    <body style="font-size:110%;">
+    <body>
 
-        <div id="content"></div>
+        <div id="content" style="font-size:110%;"></div>
 
-        <div id="prevBtn" class="btn" style="left:5%;bottom:5%">#{"<<".to_html}</div>
-        <div onclick="jumpPage()" id="pageControl" class="btn" style="left:45%;bottom:5%;"></div>
-        <div id="nextBtn" class="btn" style="right:5%;bottom:5%">#{">>".to_html}</div>
+        <div id="prevBtn" class="btn" style="left:5%;bottom:5%;">#{"<<".to_html}</div>
+        <div style="position:fixed;left:25%;bottom:5%;width:50%;" align="center">
+        <div onclick="jumpPage()" id="pageControl" class="btn" style="position:relative;display:inline;"></div>
+        </div>
+        <div id="nextBtn" class="btn" style="right:5%;bottom:5%;">#{">>".to_html}</div>
 
         <script>
             var content = document.getElementById("content")
@@ -115,6 +117,13 @@ class TextPager
                 if (pg === currentPage) return
                 currentPage = pg
                 pageControl.innerHTML = currentPage
+
+                // patch for iphone
+                pageControl.style.display = "none"
+                setTimeout(function() {
+                    pageControl.style.display = "inline"
+                }, 0)
+
                 updatePage()
             }
             var jumpPage = function () {
