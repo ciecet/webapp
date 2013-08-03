@@ -25,7 +25,7 @@ class TextPager
             content = nil
             open(@filepath, "r") { |f|
                 if pi > 0
-                    f.seek(pi * PAGE_SIZE - 1)
+                    f.seek(pi * PAGE_SIZE)
                     f.gets
                 end
                 content = (f.read(PAGE_SIZE).force_encoding("UTF-8") +
@@ -53,7 +53,7 @@ class TextPager
             .btn {
                 position:fixed;
                 background-color:rgba(255,255,0,0.4);
-                font-size:200%;
+                font-size:230%;
                 -moz-border-radius: 15px;
                 -webkit-border-radius: 15px;
                 -khtml-border-radius: 15px;
